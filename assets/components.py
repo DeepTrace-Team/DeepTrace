@@ -162,3 +162,60 @@ def render_waveform(bar_count: int = 60, highlight_ranges: list[tuple] | None = 
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_distribution_bar(items: list[dict]) -> None:
+    """Segmented horizontal bar + legend. items: [{label, value, color}]."""
+    total = sum(i["value"] for i in items) or 1
+    segments, legend = "", ""
+
+    for i in items:
+        pct = round(i["value"] / total * 100, 1)
+        segments += f'<div style="width:{pct}%; background:{i["color"]};"></div>'
+        legend += f"""
+        <div style="display:flex; align-items:center; gap:0.4rem; margin-right:1.2rem; margin-bottom:0.3rem;">
+            <span style="width:10px; height:10px; border-radius:3px; background:{i['color']}; display:inline-block;"></span>
+            <span style="color:#C4D0DC; font-size:0.9rem;">{i['label']} · {i['value']} ({pct}%)</span>
+        </div>
+        """
+
+    st.markdown(
+        f"""
+        <div style="display:flex; height:14px; border-radius:7px; overflow:hidden; margin-bottom:0.75rem;">
+            {segments}
+        </div>
+        <div style="display:flex; flex-wrap:wrap;">{legend}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_history_row(item: dict) -> None:
+    """One row in a recent-analyses list. item needs filename, modality, classification,
+    risk_level, trust_score, date."""
+    color = RISK_COLORS.get(item.get("risk_level", "LOW").upper(), "#4FD1C5")
+    icon = {"image": "🖼️", "video": "🎬", "audio": "🎙️"}.get(item.get("modality"), "📄")
+
+    st.markdown(
+        f"""
+        <div class="dt-card" style="display:flex; justify-content:space-between; align-items:center;
+                    margin-bottom:0.6rem; padding:0.9rem 1.2rem;">
+            <div style="display:flex; align-items:center; gap:0.8rem;">
+                <span style="font-size:1.3rem;">{icon}</span>
+                <div>
+                    <div style="font-weight:600;">{item.get('filename', 'unknown')}</div>
+                    <div style="color:#9FB3C8; font-size:0.85rem;">
+                        {item.get('classification', '')} · {item.get('date', '')}
+                    </div>
+                </div>
+            </div>
+            <div style="text-align:right;">
+                <div class="dt-mono" style="color:{color}; font-size:0.85rem;">{item.get('risk_level', '')}</div>
+                <div class="dt-mono" style="font-size:0.85rem; color:#9FB3C8;">
+                    {item.get('trust_score', 0)}/100
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

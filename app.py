@@ -26,12 +26,12 @@ apply_theme()
 
 pages = {
     "DeepTrace": [
-        st.Page("pages/home.py", title="Home", icon="🏠", default=True),
-        st.Page("pages/image_analysis.py", title="Image", icon="🖼️"),
-        st.Page("pages/video_analysis.py", title="Video", icon="🎬"),
-        st.Page("pages/audio_analysis.py", title="Audio", icon="🎙️"),
-        st.Page("pages/results.py", title="Results", icon="📊"),
-        st.Page("pages/dashboard.py", title="Dashboard", icon="📈"),
+        st.Page("pages/home.py", title="Home", default=True),
+        st.Page("pages/image_analysis.py", title="Image"),
+        st.Page("pages/video_analysis.py", title="Video"),
+        st.Page("pages/audio_analysis.py", title="Audio"),
+        st.Page("pages/results.py", title="Results"),
+        st.Page("pages/dashboard.py", title="Dashboard"),
     ]
 }
 
