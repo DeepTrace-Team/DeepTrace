@@ -11,9 +11,23 @@ def _write_png(path: Path) -> None:
     image.save(path)
 
 
-def test_analyze_image_pipeline(tmp_path: Path) -> None:
+def test_analyze_image_pipeline(tmp_path: Path, monkeypatch) -> None:
     image_path = tmp_path / "pipeline_test.png"
     _write_png(image_path)
+
+    # Mock Reality Defender so this unit test does not call
+    # the external API.
+    def fake_detect_image(path):
+        return {
+            "status": "AUTHENTIC",
+            "score": 0.10,
+            "models": [],
+        }
+
+    monkeypatch.setattr(
+        "pipelines.image_pipeline.detect_image",
+        fake_detect_image,
+    )
 
     result = analyze_image(image_path)
 
@@ -22,14 +36,16 @@ def test_analyze_image_pipeline(tmp_path: Path) -> None:
     assert result.file_info.file_type == "image/png"
     assert result.file_info.size > 0
 
-    assert result.assessment.classification == "unknown"
-    assert result.assessment.confidence == 0.0
-    assert result.assessment.trust_score == 0
-    assert result.assessment.risk_level == "unknown"
+    assert result.assessment.classification == "authentic"
+    assert result.assessment.confidence == 0.10
+    assert result.assessment.trust_score == 90
+    assert result.assessment.risk_level == "LOW"
 
     assert result.metadata.available is False
     assert result.metadata.findings == []
-    assert result.evidence == []
+
+    assert len(result.evidence) == 1
+    assert result.evidence[0].type == "AI_DETECTION"
 
 
 def test_analyze_image_missing_file(tmp_path: Path) -> None:
