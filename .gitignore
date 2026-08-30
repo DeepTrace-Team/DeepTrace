@@ -1,12 +1,21 @@
-__pycache__/
-*.py[cod]
-.coverage
-.pytest_cache/
-.venv/
+# Environment / secrets
 .env
 .env.*
-.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Testing / coverage
+.coverage
+.pytest_cache/
+
+# Virtual environments
 venv/
 .venv/
-__pycache__/
-*.pyc
+
+# DeepTrace runtime data
+data/
+
+# OS
+.DS_Store

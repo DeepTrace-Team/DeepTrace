@@ -4,7 +4,10 @@ from datetime import datetime
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import (
+    getSampleStyleSheet,
+    ParagraphStyle,
+)
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -12,7 +15,6 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
-    PageBreak,
 )
 
 
@@ -23,21 +25,33 @@ RISK_COLORS = {
 }
 
 
-def _safe(value, default="Not available"):
-    """
-    Convert missing/None values into something safe for the PDF.
-    """
+AUTHENTIC_STATUSES = {
+    "AUTHENTIC",
+    "REAL",
+    "GENUINE",
+}
+
+
+def _safe(
+    value,
+    default="Not available",
+):
     if value is None or value == "":
         return default
+
     return str(value)
 
 
-def _get_modality(result: dict) -> str:
-    """
-    Determine whether the result belongs to image, video, or audio.
-    """
+def _get_modality(
+    result: dict,
+) -> str:
 
-    if "suspicious_segments" in result or "frame_scores" in result:
+    if (
+        "suspicious_segments"
+        in result
+        or "frame_scores"
+        in result
+    ):
         return "Video"
 
     if "suspicious_ranges" in result:
@@ -46,20 +60,35 @@ def _get_modality(result: dict) -> str:
     return "Image"
 
 
-def generate_report(result: dict) -> BytesIO:
-    """
-    Generate a DeepTrace forensic PDF report.
+def _confidence_percentage(
+    value,
+) -> float:
 
-    Parameters
-    ----------
-    result : dict
-        Analysis result dictionary.
+    try:
+        value = float(value)
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return 0.0
 
-    Returns
-    -------
-    BytesIO
-        PDF file stored in memory.
-    """
+    # Assessment confidence is always stored internally
+    # as a 0–1 fraction.
+
+    value = max(
+        0.0,
+        min(
+            1.0,
+            value,
+        ),
+    )
+
+    return value * 100
+
+
+def generate_report(
+    result: dict,
+) -> BytesIO:
 
     buffer = BytesIO()
 
@@ -75,7 +104,7 @@ def generate_report(result: dict) -> BytesIO:
     styles = getSampleStyleSheet()
 
     # --------------------------------------------------
-    # CUSTOM STYLES
+    # STYLES
     # --------------------------------------------------
 
     title_style = ParagraphStyle(
@@ -84,7 +113,9 @@ def generate_report(result: dict) -> BytesIO:
         fontName="Helvetica-Bold",
         fontSize=28,
         leading=34,
-        textColor=colors.HexColor("#0B1220"),
+        textColor=colors.HexColor(
+            "#0B1220"
+        ),
         alignment=TA_CENTER,
         spaceAfter=6,
     )
@@ -95,7 +126,9 @@ def generate_report(result: dict) -> BytesIO:
         fontName="Helvetica",
         fontSize=11,
         leading=16,
-        textColor=colors.HexColor("#64748B"),
+        textColor=colors.HexColor(
+            "#64748B"
+        ),
         alignment=TA_CENTER,
         spaceAfter=24,
     )
@@ -106,7 +139,9 @@ def generate_report(result: dict) -> BytesIO:
         fontName="Helvetica-Bold",
         fontSize=16,
         leading=20,
-        textColor=colors.HexColor("#0F766E"),
+        textColor=colors.HexColor(
+            "#0F766E"
+        ),
         spaceBefore=18,
         spaceAfter=10,
     )
@@ -117,7 +152,9 @@ def generate_report(result: dict) -> BytesIO:
         fontName="Helvetica",
         fontSize=10.5,
         leading=16,
-        textColor=colors.HexColor("#334155"),
+        textColor=colors.HexColor(
+            "#334155"
+        ),
     )
 
     small_style = ParagraphStyle(
@@ -125,7 +162,9 @@ def generate_report(result: dict) -> BytesIO:
         parent=normal_style,
         fontSize=9,
         leading=13,
-        textColor=colors.HexColor("#64748B"),
+        textColor=colors.HexColor(
+            "#64748B"
+        ),
     )
 
     verdict_style = ParagraphStyle(
@@ -135,7 +174,9 @@ def generate_report(result: dict) -> BytesIO:
         fontSize=20,
         leading=26,
         alignment=TA_CENTER,
-        textColor=colors.HexColor("#0F172A"),
+        textColor=colors.HexColor(
+            "#0F172A"
+        ),
     )
 
     story = []
@@ -144,10 +185,15 @@ def generate_report(result: dict) -> BytesIO:
     # HEADER
     # --------------------------------------------------
 
-    modality = _get_modality(result)
+    modality = _get_modality(
+        result
+    )
 
     story.append(
-        Paragraph("DEEPTRACE", title_style)
+        Paragraph(
+            "DEEPTRACE",
+            title_style,
+        )
     )
 
     story.append(
@@ -168,24 +214,36 @@ def generate_report(result: dict) -> BytesIO:
     # ASSESSMENT
     # --------------------------------------------------
 
-    assessment = result.get("assessment", {})
+    assessment = result.get(
+        "assessment",
+        {},
+    )
 
     classification = _safe(
-        assessment.get("classification")
+        assessment.get(
+            "classification"
+        )
+    ).upper()
+
+    confidence = _confidence_percentage(
+        assessment.get(
+            "confidence",
+            0,
+        )
     )
 
-    confidence = assessment.get(
-        "confidence",
-        0,
-    )
-
-    trust_score = assessment.get(
-        "trust_score",
-        0,
+    trust_score = int(
+        assessment.get(
+            "trust_score",
+            0,
+        )
     )
 
     risk_level = _safe(
-        assessment.get("risk_level", "LOW")
+        assessment.get(
+            "risk_level",
+            "LOW",
+        )
     ).upper()
 
     risk_color = RISK_COLORS.get(
@@ -208,84 +266,104 @@ def generate_report(result: dict) -> BytesIO:
     )
 
     story.append(
-        Spacer(1, 12)
+        Spacer(
+            1,
+            12,
+        )
     )
 
     assessment_data = [
-        ["Risk Level", risk_level],
-        ["Confidence", f"{confidence}%"],
-        ["Trust Score", f"{trust_score}/100"],
-        ["Media Type", modality],
+        [
+            "Risk Level",
+            risk_level,
+        ],
+        [
+            "Authenticity Confidence",
+            f"{confidence:.0f}%",
+        ],
+        [
+            "Trust Score",
+            f"{trust_score}/100",
+        ],
+        [
+            "Media Type",
+            modality,
+        ],
     ]
 
     assessment_table = Table(
         assessment_data,
-        colWidths=[2.2 * inch, 3.5 * inch],
+        colWidths=[
+            2.2 * inch,
+            3.5 * inch,
+        ],
     )
 
     assessment_table.setStyle(
-        TableStyle([
-            (
-                "BACKGROUND",
-                (0, 0),
-                (0, -1),
-                colors.HexColor("#E2E8F0"),
-            ),
-            (
-                "TEXTCOLOR",
-                (0, 0),
-                (0, -1),
-                colors.HexColor("#334155"),
-            ),
-            (
-                "FONTNAME",
-                (0, 0),
-                (0, -1),
-                "Helvetica-Bold",
-            ),
-            (
-                "FONTNAME",
-                (1, 0),
-                (1, -1),
-                "Helvetica",
-            ),
-            (
-                "BACKGROUND",
-                (1, 0),
-                (1, 0),
-                colors.HexColor(risk_color),
-            ),
-            (
-                "GRID",
-                (0, 0),
-                (-1, -1),
-                0.5,
-                colors.HexColor("#CBD5E1"),
-            ),
-            (
-                "VALIGN",
-                (0, 0),
-                (-1, -1),
-                "MIDDLE",
-            ),
-            (
-                "PADDING",
-                (0, 0),
-                (-1, -1),
-                10,
-            ),
-        ])
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (0, -1),
+                    colors.HexColor(
+                        "#E2E8F0"
+                    ),
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (0, -1),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "BACKGROUND",
+                    (1, 0),
+                    (1, 0),
+                    colors.HexColor(
+                        risk_color
+                    ),
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.HexColor(
+                        "#CBD5E1"
+                    ),
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+                (
+                    "PADDING",
+                    (0, 0),
+                    (-1, -1),
+                    10,
+                ),
+            ]
+        )
     )
 
-    story.append(assessment_table)
+    story.append(
+        assessment_table
+    )
 
     # --------------------------------------------------
     # FILE INFORMATION
     # --------------------------------------------------
 
-    file_info = result.get("file_info", {})
+    file_info = result.get(
+        "file_info",
+        {},
+    )
 
     if file_info:
+
         story.append(
             Paragraph(
                 "File Information",
@@ -295,54 +373,71 @@ def generate_report(result: dict) -> BytesIO:
 
         file_data = []
 
-        for key, value in file_info.items():
+        for key, value in (
+            file_info.items()
+        ):
 
             formatted_key = (
-                key.replace("_", " ")
-                .title()
+                key.replace(
+                    "_",
+                    " ",
+                ).title()
             )
 
-            file_data.append([
-                formatted_key,
-                _safe(value),
-            ])
+            file_data.append(
+                [
+                    formatted_key,
+                    _safe(value),
+                ]
+            )
 
         file_table = Table(
             file_data,
-            colWidths=[2.2 * inch, 3.5 * inch],
+            colWidths=[
+                2.2 * inch,
+                3.5 * inch,
+            ],
         )
 
         file_table.setStyle(
-            TableStyle([
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (0, -1),
-                    colors.HexColor("#F1F5F9"),
-                ),
-                (
-                    "FONTNAME",
-                    (0, 0),
-                    (0, -1),
-                    "Helvetica-Bold",
-                ),
-                (
-                    "GRID",
-                    (0, 0),
-                    (-1, -1),
-                    0.5,
-                    colors.HexColor("#CBD5E1"),
-                ),
-                (
-                    "PADDING",
-                    (0, 0),
-                    (-1, -1),
-                    9,
-                ),
-            ])
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (0, -1),
+                        colors.HexColor(
+                            "#F1F5F9"
+                        ),
+                    ),
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (0, -1),
+                        "Helvetica-Bold",
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.5,
+                        colors.HexColor(
+                            "#CBD5E1"
+                        ),
+                    ),
+                    (
+                        "PADDING",
+                        (0, 0),
+                        (-1, -1),
+                        9,
+                    ),
+                ]
+            )
         )
 
-        story.append(file_table)
+        story.append(
+            file_table
+        )
 
     # --------------------------------------------------
     # EVIDENCE
@@ -372,26 +467,40 @@ def generate_report(result: dict) -> BytesIO:
 
         for item in evidence:
 
-            raw_score = item.get(
-                "score",
-                0,
-            )
+            try:
 
-            score = (
-                raw_score * 100
-                if raw_score <= 1
-                else raw_score
-            )
+                score = (
+                    float(
+                        item.get(
+                            "score",
+                            0,
+                        )
+                    )
+                    * 100
+                )
 
-            evidence_data.append([
-                _safe(
-                    item.get("source")
-                ),
-                f"{score:.0f}%",
-                _safe(
-                    item.get("explanation")
-                ),
-            ])
+            except (
+                TypeError,
+                ValueError,
+            ):
+
+                score = 0
+
+            evidence_data.append(
+                [
+                    _safe(
+                        item.get(
+                            "source"
+                        )
+                    ),
+                    f"{score:.0f}%",
+                    _safe(
+                        item.get(
+                            "explanation"
+                        )
+                    ),
+                ]
+            )
 
         evidence_table = Table(
             evidence_data,
@@ -404,45 +513,51 @@ def generate_report(result: dict) -> BytesIO:
         )
 
         evidence_table.setStyle(
-            TableStyle([
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (-1, 0),
-                    colors.HexColor("#0F766E"),
-                ),
-                (
-                    "TEXTCOLOR",
-                    (0, 0),
-                    (-1, 0),
-                    colors.white,
-                ),
-                (
-                    "FONTNAME",
-                    (0, 0),
-                    (-1, 0),
-                    "Helvetica-Bold",
-                ),
-                (
-                    "GRID",
-                    (0, 0),
-                    (-1, -1),
-                    0.4,
-                    colors.HexColor("#CBD5E1"),
-                ),
-                (
-                    "VALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "TOP",
-                ),
-                (
-                    "PADDING",
-                    (0, 0),
-                    (-1, -1),
-                    8,
-                ),
-            ])
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor(
+                            "#0F766E"
+                        ),
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (-1, 0),
+                        "Helvetica-Bold",
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.4,
+                        colors.HexColor(
+                            "#CBD5E1"
+                        ),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "PADDING",
+                        (0, 0),
+                        (-1, -1),
+                        8,
+                    ),
+                ]
+            )
         )
 
         story.append(
@@ -453,7 +568,7 @@ def generate_report(result: dict) -> BytesIO:
 
         story.append(
             Paragraph(
-                "No evidence signals were returned by the analysis pipeline.",
+                "No evidence signals were returned.",
                 normal_style,
             )
         )
@@ -493,7 +608,10 @@ def generate_report(result: dict) -> BytesIO:
                 )
 
                 story.append(
-                    Spacer(1, 5)
+                    Spacer(
+                        1,
+                        5,
+                    )
                 )
 
         else:
@@ -531,15 +649,21 @@ def generate_report(result: dict) -> BytesIO:
             ]
         ]
 
-        for segment in suspicious_segments:
+        for segment in (
+            suspicious_segments
+        ):
 
-            segment_data.append([
-                f"{segment.get('start_pct', 0)}%",
-                f"{segment.get('end_pct', 0)}%",
-                _safe(
-                    segment.get("severity")
-                ),
-            ])
+            segment_data.append(
+                [
+                    f"{segment.get('start_pct', 0)}%",
+                    f"{segment.get('end_pct', 0)}%",
+                    _safe(
+                        segment.get(
+                            "severity"
+                        )
+                    ),
+                ]
+            )
 
         segment_table = Table(
             segment_data,
@@ -551,39 +675,45 @@ def generate_report(result: dict) -> BytesIO:
         )
 
         segment_table.setStyle(
-            TableStyle([
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (-1, 0),
-                    colors.HexColor("#7C3AED"),
-                ),
-                (
-                    "TEXTCOLOR",
-                    (0, 0),
-                    (-1, 0),
-                    colors.white,
-                ),
-                (
-                    "FONTNAME",
-                    (0, 0),
-                    (-1, 0),
-                    "Helvetica-Bold",
-                ),
-                (
-                    "GRID",
-                    (0, 0),
-                    (-1, -1),
-                    0.5,
-                    colors.HexColor("#CBD5E1"),
-                ),
-                (
-                    "PADDING",
-                    (0, 0),
-                    (-1, -1),
-                    8,
-                ),
-            ])
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor(
+                            "#7C3AED"
+                        ),
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (-1, 0),
+                        "Helvetica-Bold",
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.5,
+                        colors.HexColor(
+                            "#CBD5E1"
+                        ),
+                    ),
+                    (
+                        "PADDING",
+                        (0, 0),
+                        (-1, -1),
+                        8,
+                    ),
+                ]
+            )
         )
 
         story.append(
@@ -615,12 +745,16 @@ def generate_report(result: dict) -> BytesIO:
             ]
         ]
 
-        for start, end in suspicious_ranges:
+        for start, end in (
+            suspicious_ranges
+        ):
 
-            audio_data.append([
-                str(start),
-                str(end),
-            ])
+            audio_data.append(
+                [
+                    str(start),
+                    str(end),
+                ]
+            )
 
         audio_table = Table(
             audio_data,
@@ -631,39 +765,45 @@ def generate_report(result: dict) -> BytesIO:
         )
 
         audio_table.setStyle(
-            TableStyle([
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (-1, 0),
-                    colors.HexColor("#B91C1C"),
-                ),
-                (
-                    "TEXTCOLOR",
-                    (0, 0),
-                    (-1, 0),
-                    colors.white,
-                ),
-                (
-                    "FONTNAME",
-                    (0, 0),
-                    (-1, 0),
-                    "Helvetica-Bold",
-                ),
-                (
-                    "GRID",
-                    (0, 0),
-                    (-1, -1),
-                    0.5,
-                    colors.HexColor("#CBD5E1"),
-                ),
-                (
-                    "PADDING",
-                    (0, 0),
-                    (-1, -1),
-                    8,
-                ),
-            ])
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor(
+                            "#B91C1C"
+                        ),
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (-1, 0),
+                        "Helvetica-Bold",
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.5,
+                        colors.HexColor(
+                            "#CBD5E1"
+                        ),
+                    ),
+                    (
+                        "PADDING",
+                        (0, 0),
+                        (-1, -1),
+                        8,
+                    ),
+                ]
+            )
         )
 
         story.append(
@@ -693,24 +833,30 @@ def generate_report(result: dict) -> BytesIO:
     )
 
     story.append(
-        Spacer(1, 12)
+        Spacer(
+            1,
+            12,
+        )
     )
 
     story.append(
         Paragraph(
-            "Disclaimer: This report represents an automated forensic assessment "
-            "based on the available detection models and evidence signals. "
-            "Results should be interpreted as decision-support information and "
+            "Disclaimer: This report represents an automated "
+            "forensic assessment based on the available detection "
+            "models and evidence signals. Results should be "
+            "interpreted as decision-support information and "
             "not as definitive proof of authenticity or manipulation.",
             small_style,
         )
     )
 
     # --------------------------------------------------
-    # BUILD PDF
+    # BUILD
     # --------------------------------------------------
 
-    doc.build(story)
+    doc.build(
+        story
+    )
 
     buffer.seek(0)
 

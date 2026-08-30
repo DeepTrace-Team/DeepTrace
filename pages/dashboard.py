@@ -1,8 +1,11 @@
 """
 DeepTrace History / Statistics Dashboard.
 
-Uses mock history data for the dashboard and also includes
-results generated during the current Streamlit session.
+Reads real analysis history persisted by every completed analysis
+(utils.history_manager.save_analysis, called from the image, video,
+and audio pages) via load_history(). No mock data — a fresh install
+with no analyses yet shows an explicit empty state instead of fake
+numbers.
 
 The dashboard displays:
 - Total analyses
@@ -15,15 +18,34 @@ The dashboard displays:
 - Recent analyses
 """
 
+from datetime import datetime
+
 import pandas as pd
 import streamlit as st
 
-from assets.mock_data import generate_history
 from assets.components import (
     RISK_COLORS,
     render_distribution_bar,
     render_history_row,
 )
+from utils.history_manager import clear_history, load_history
+
+
+def _md_html(html: str) -> str:
+    """
+    Strip leading whitespace from every line of an HTML block before
+    handing it to st.markdown().
+
+    Same fix as assets/components.py's _md_html: Streamlit's Markdown
+    renderer treats any line indented 4+ spaces as a preformatted
+    code block. Indented triple-quoted HTML strings hit this even
+    with unsafe_allow_html=True set correctly.
+    """
+
+    return "\n".join(
+        line.lstrip()
+        for line in html.strip("\n").splitlines()
+    )
 
 
 # -------------------------------------------------
@@ -42,191 +64,92 @@ st.markdown(
 
 
 # -------------------------------------------------
-# SESSION RESULTS
+# REAL PERSISTED HISTORY
 # -------------------------------------------------
 
-def _session_results_as_history() -> list[dict]:
+def _persisted_history_as_dashboard_rows() -> list[dict]:
     """
-    Convert analysis results generated during the current
-    Streamlit session into dashboard history format.
+    Convert entries from load_history() (saved by save_analysis()
+    after every completed image/video/audio analysis) into the
+    row shape the dashboard's rendering below expects — mainly
+    adding date_obj / date, which persisted entries store as a
+    single ISO `timestamp` string rather than pre-split fields.
     """
 
-    items = []
+    rows = []
 
+    for entry in load_history():
 
-    # ---------------------------------------------
-    # IMAGE RESULT
-    # ---------------------------------------------
+        timestamp = entry.get("timestamp")
 
-    img = st.session_state.get("last_result")
+        date_obj = None
 
-    if img:
+        if timestamp:
 
-        assessment = img.get(
-            "assessment",
-            {}
+            try:
+                date_obj = datetime.fromisoformat(timestamp)
+            except (ValueError, TypeError):
+                date_obj = None
+
+        is_today = (
+            date_obj is not None
+            and date_obj.date() == datetime.now().date()
         )
 
-        file_info = img.get(
-            "file_info",
-            {}
-        )
-
-        items.append(
+        rows.append(
             {
-                "filename": file_info.get(
-                    "filename",
-                    "uploaded_image",
+                **entry,
+                "date_obj": date_obj,
+                "date": (
+                    "Today"
+                    if is_today
+                    else (
+                        date_obj.strftime("%b %d")
+                        if date_obj
+                        else "Unknown"
+                    )
                 ),
-
-                "modality": "image",
-
-                "classification": assessment.get(
-                    "classification",
-                    "Unknown",
-                ),
-
-                "risk_level": assessment.get(
-                    "risk_level",
-                    "LOW",
-                ),
-
-                "trust_score": assessment.get(
-                    "trust_score",
-                    0,
-                ),
-
-                "confidence": assessment.get(
-                    "confidence",
-                    0,
-                ),
-
-                "date": "Today",
             }
         )
 
-
-    # ---------------------------------------------
-    # VIDEO RESULT
-    # ---------------------------------------------
-
-    vid = st.session_state.get("video_result")
-
-    if vid:
-
-        assessment = vid.get(
-            "assessment",
-            {}
-        )
-
-        file_info = vid.get(
-            "file_info",
-            {}
-        )
-
-        items.append(
-            {
-                "filename": file_info.get(
-                    "filename",
-                    "uploaded_video.mp4",
-                ),
-
-                "modality": "video",
-
-                "classification": assessment.get(
-                    "classification",
-                    "Unknown",
-                ),
-
-                "risk_level": assessment.get(
-                    "risk_level",
-                    "LOW",
-                ),
-
-                "trust_score": assessment.get(
-                    "trust_score",
-                    0,
-                ),
-
-                "confidence": assessment.get(
-                    "confidence",
-                    0,
-                ),
-
-                "date": "Today",
-            }
-        )
-
-
-    # ---------------------------------------------
-    # AUDIO RESULT
-    # ---------------------------------------------
-
-    aud = st.session_state.get("audio_result")
-
-    if aud:
-
-        assessment = aud.get(
-            "assessment",
-            {}
-        )
-
-        file_info = aud.get(
-            "file_info",
-            {}
-        )
-
-        items.append(
-            {
-                "filename": file_info.get(
-                    "filename",
-                    "uploaded_audio.wav",
-                ),
-
-                "modality": "audio",
-
-                "classification": assessment.get(
-                    "classification",
-                    "Unknown",
-                ),
-
-                "risk_level": assessment.get(
-                    "risk_level",
-                    "LOW",
-                ),
-
-                "trust_score": assessment.get(
-                    "trust_score",
-                    0,
-                ),
-
-                "confidence": assessment.get(
-                    "confidence",
-                    0,
-                ),
-
-                "date": "Today",
-            }
-        )
-
-
-    return items
+    return rows
 
 
 # -------------------------------------------------
 # LOAD DASHBOARD HISTORY
 # -------------------------------------------------
 
-session_history = _session_results_as_history()
+# Real history only — save_analysis() runs immediately after every
+# completed analysis on the image/video/audio pages, so this already
+# includes everything the app has ever produced, not just this
+# session. No mock padding: a fresh install with nothing analyzed
+# yet gets an explicit empty state below instead of fake entries.
+history = _persisted_history_as_dashboard_rows()
 
-mock_history = generate_history(
-    n=18
-)
 
-history = (
-    session_history
-    + mock_history
-)
+# -------------------------------------------------
+# EMPTY STATE
+# -------------------------------------------------
+
+if not history:
+
+    st.markdown(
+        _md_html("""
+        <div class="dt-card">
+
+            <h3>No analyses yet</h3>
+
+            <p style="color:#9FB3C8; margin:0;">
+                Run an image, video, or audio analysis and it'll
+                show up here.
+            </p>
+
+        </div>
+        """),
+        unsafe_allow_html=True,
+    )
+
+    st.stop()
 
 
 # -------------------------------------------------
@@ -240,9 +163,11 @@ total = len(
 high_risk = sum(
     1
     for item in history
-    if item.get(
-        "risk_level",
-        "",
+    if str(
+        item.get(
+            "risk_level",
+            "",
+        )
     ).upper() == "HIGH"
 )
 
@@ -352,9 +277,11 @@ with col_a:
 
     for item in history:
 
-        modality = item.get(
-            "modality",
-            "unknown",
+        modality = str(
+            item.get(
+                "modality",
+                "unknown",
+            )
         ).lower()
 
 
@@ -416,9 +343,11 @@ with col_b:
 
     for item in history:
 
-        risk = item.get(
-            "risk_level",
-            "LOW",
+        risk = str(
+            item.get(
+                "risk_level",
+                "LOW",
+            )
         ).upper()
 
 
@@ -488,6 +417,7 @@ trend_rows = [
     if (
         item.get("date") != "Today"
         and "date_obj" in item
+        and item.get("date_obj") is not None
     )
 
 ]
@@ -676,3 +606,78 @@ st.markdown(
     '</div>',
     unsafe_allow_html=True,
 )
+
+
+# -------------------------------------------------
+# FLUSH HISTORY
+# -------------------------------------------------
+
+st.markdown(
+    "<div style='height:1.5rem;'></div>",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<h3 class="dt-display">'
+    'Danger zone'
+    '</h3>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    _md_html("""
+    <p style="color:#9FB3C8; margin-bottom:0.75rem;">
+        Permanently deletes every saved analysis from
+        data/analysis_history.json. This can't be undone.
+    </p>
+    """),
+    unsafe_allow_html=True,
+)
+
+
+@st.dialog("Clear all history?")
+def _confirm_clear_history() -> None:
+
+    st.write(
+        f"This permanently deletes all {total} saved "
+        "analyses. This can't be undone."
+    )
+
+    col_cancel, col_confirm = st.columns(2)
+
+    with col_cancel:
+
+        if st.button(
+            "Cancel",
+            use_container_width=True,
+        ):
+            st.rerun()
+
+    with col_confirm:
+
+        if st.button(
+            "Clear history",
+            type="primary",
+            use_container_width=True,
+        ):
+
+            if clear_history():
+                st.toast(
+                    "History cleared.",
+                    icon="\U0001F5D1\uFE0F",
+                )
+            else:
+                st.toast(
+                    "Couldn't clear history — check "
+                    "file permissions.",
+                    icon="\u26A0\uFE0F",
+                )
+
+            st.rerun()
+
+
+if st.button(
+    "Flush history",
+):
+
+    _confirm_clear_history()

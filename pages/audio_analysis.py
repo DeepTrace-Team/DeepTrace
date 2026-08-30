@@ -1,12 +1,19 @@
 """
-Audio upload UI.
-
-Uses mock data until the real audio_pipeline.py is connected.
+DeepTrace Audio Analysis Page.
 """
+
+import tempfile
+from pathlib import Path
 
 import streamlit as st
 
-from utils.history_manager import save_analysis
+from pipelines.audio_pipeline import (
+    analyze_audio,
+)
+
+from utils.history_manager import (
+    save_analysis,
+)
 
 from assets.components import (
     render_assessment_card,
@@ -15,39 +22,54 @@ from assets.components import (
 )
 
 
-# --------------------------------------------------
+# ============================================================
 # PAGE HEADER
-# --------------------------------------------------
+# ============================================================
 
 st.markdown(
-    '<div class="dt-eyebrow">Audio Analysis</div>',
+    '<div class="dt-eyebrow">'
+    'Audio Analysis'
+    '</div>',
     unsafe_allow_html=True,
 )
 
 st.markdown(
-    '<h2 class="dt-display">Upload audio</h2>',
+    '<h2 class="dt-display">'
+    'Upload audio'
+    '</h2>',
     unsafe_allow_html=True,
 )
 
 
-# --------------------------------------------------
-# FILE UPLOAD
-# --------------------------------------------------
+# ============================================================
+# UPLOAD
+# ============================================================
 
 uploaded = st.file_uploader(
     "Audio file",
-    type=["mp3", "wav", "m4a"],
+    type=[
+        "mp3",
+        "wav",
+        "m4a",
+        "aac",
+        "ogg",
+        "flac",
+    ],
     label_visibility="collapsed",
 )
 
 
-# --------------------------------------------------
-# AUDIO PREVIEW + ANALYSIS
-# --------------------------------------------------
+# ============================================================
+# AUDIO PREVIEW
+# ============================================================
 
 if uploaded:
 
-    col_preview, col_action = st.columns([2, 1])
+    col_preview, col_action = (
+        st.columns(
+            [2, 1]
+        )
+    )
 
     with col_preview:
 
@@ -82,169 +104,214 @@ if uploaded:
             unsafe_allow_html=True,
         )
 
-
-    # --------------------------------------------------
+    # ========================================================
     # RUN ANALYSIS
-    # --------------------------------------------------
+    # ========================================================
 
     if analyze:
+
+        audio_result = None
+        temp_path: Path | None = None
 
         with st.status(
             "Analyzing...",
             expanded=True,
         ) as status:
 
-            st.write("Validating audio")
-            st.write("Preprocessing")
-            st.write(
-                "Running synthetic speech / spoof detection"
-            )
-            st.write("Collecting evidence")
-            st.write("Calculating trust score")
+            try:
 
-            status.update(
-                label="Analysis complete",
-                state="complete",
-            )
+                st.write(
+                    "Saving upload..."
+                )
 
+                suffix = (
+                    Path(
+                        uploaded.name
+                    ).suffix.lower()
+                    or ".wav"
+                )
 
-        # --------------------------------------------------
-        # MOCK RESULT
-        #
-        # Replace later with:
-        #
-        # audio_result = analyze_audio(uploaded)
-        # --------------------------------------------------
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=suffix,
+                ) as temp_file:
 
-        audio_result = {
+                    temp_file.write(
+                        uploaded.getvalue()
+                    )
 
-            "file_info": {
+                    temp_path = Path(
+                        temp_file.name
+                    )
 
-                "filename":
-                    uploaded.name,
+                st.write(
+                    "Extracting technical properties..."
+                )
 
-                "file_type":
-                    uploaded.type,
+                st.write(
+                    "Sending audio to Reality Defender..."
+                )
 
-                "size":
-                    f"{uploaded.size / 1024:.1f} KB",
+                st.write(
+                    "Waiting for detector response..."
+                )
 
-            },
+                analysis_result = (
+                    analyze_audio(
+                        temp_path
+                    )
+                )
 
-            "assessment": {
+                audio_result = (
+                    analysis_result.to_dict()
+                )
 
-                "classification":
-                    "Likely Voice Clone",
+                # ------------------------------------------------
+                # RESTORE ORIGINAL FILE INFO
+                # ------------------------------------------------
 
-                "confidence":
-                    88.0,
+                audio_result[
+                    "file_info"
+                ] = {
 
-                "trust_score":
-                    22,
-
-                "risk_level":
-                    "HIGH",
-
-            },
-
-            "suspicious_ranges": [
-
-                (14, 27),
-
-                (40, 46),
-
-            ],
-
-            "evidence": [
-
-                {
-
-                    "source":
-                        "Spoof Detector",
-
-                    "score":
-                        0.88,
-
-                    "explanation": (
-                        "Spectral characteristics consistent "
-                        "with neural voice synthesis."
+                    **audio_result.get(
+                        "file_info",
+                        {},
                     ),
 
-                },
+                    "filename":
+                        uploaded.name,
 
-                {
+                    "file_type":
+                        uploaded.type,
 
-                    "source":
-                        "Prosody Analysis",
+                    "size":
+                        f"{uploaded.size / 1024:.1f} KB",
+                }
 
-                    "score":
-                        0.57,
+                status.update(
+                    label="Analysis complete",
+                    state="complete",
+                )
 
-                    "explanation": (
-                        "Unnaturally uniform pacing across "
-                        "sentence boundaries."
-                    ),
+            except Exception as error:
 
-                },
+                status.update(
+                    label="Analysis failed",
+                    state="error",
+                )
 
-            ],
+                st.error(
+                    f"Audio analysis failed: "
+                    f"{error}"
+                )
 
-        }
+            finally:
 
+                if temp_path is not None:
 
-        # --------------------------------------------------
-        # SAVE AUDIO-SPECIFIC RESULT
-        # --------------------------------------------------
+                    temp_path.unlink(
+                        missing_ok=True
+                    )
 
-        st.session_state[
-            "audio_result"
-        ] = audio_result
+        # ====================================================
+        # SAVE RESULT
+        # ====================================================
 
+        if audio_result is not None:
 
-        # --------------------------------------------------
-        # SAVE UNIVERSAL RESULT
-        # --------------------------------------------------
+            st.session_state[
+                "audio_result"
+            ] = audio_result
 
-        st.session_state[
-            "current_result"
-        ] = {
+            st.session_state[
+                "current_result"
+            ] = {
 
-            **audio_result,
+                **audio_result,
 
-            "modality":
+                "modality":
+                    "audio",
+            }
+
+            save_analysis(
+                audio_result,
                 "audio",
+            )
 
-        }
-
-
-        # --------------------------------------------------
-        # SAVE TO PERSISTENT HISTORY
-        # --------------------------------------------------
-
-        save_analysis(
-            audio_result,
-            "audio",
-        )
+            st.switch_page(
+                "pages/results.py"
+            )
 
 
-        # --------------------------------------------------
-        # GO TO RESULTS PAGE
-        # --------------------------------------------------
-
-        st.switch_page(
-            "pages/results.py"
-        )
-
-
-# --------------------------------------------------
-# SHOW RESULT ON AUDIO PAGE
-# --------------------------------------------------
+# ============================================================
+# SHOW EXISTING RESULT
+# ============================================================
 
 if "audio_result" in st.session_state:
 
     ar = st.session_state[
         "audio_result"
     ]
+
+    assessment = ar.get(
+        "assessment",
+        {},
+    )
+
+    classification = str(
+        assessment.get(
+            "classification",
+            "UNKNOWN",
+        )
+    ).upper()
+
+    # ========================================================
+    # NOT APPLICABLE
+    # ========================================================
+
+    if classification == "NOT_APPLICABLE":
+
+        st.markdown(
+            '<h3 class="dt-display" '
+            'style="margin-top:1.5rem;">'
+            'Detection Status'
+            '</h3>',
+            unsafe_allow_html=True,
+        )
+
+        st.warning(
+            "Reality Defender could not reliably "
+            "evaluate this audio file. "
+            "No authenticity score was generated."
+        )
+
+    # ========================================================
+    # NORMAL RESULT
+    # ========================================================
+
+    else:
+
+        st.markdown(
+            '<h3 class="dt-display" '
+            'style="margin-top:1.5rem;">'
+            'Assessment'
+            '</h3>',
+            unsafe_allow_html=True,
+        )
+
+        render_assessment_card(
+            assessment
+        )
+
+    # ========================================================
+    # WAVEFORM
+    # ========================================================
+
+    suspicious_ranges = ar.get(
+        "suspicious_ranges",
+        [],
+    )
 
     st.markdown(
         '<h3 class="dt-display" '
@@ -256,39 +323,70 @@ if "audio_result" in st.session_state:
 
     render_waveform(
         bar_count=60,
-        highlight_ranges=ar["suspicious_ranges"],
+        highlight_ranges=(
+            suspicious_ranges
+            if isinstance(
+                suspicious_ranges,
+                list,
+            )
+            else []
+        ),
         seed_key="audio_waveform",
     )
 
-    st.markdown(
-        """
-        <p style="color:#9FB3C8;
-                  font-size:0.85rem;">
-            Highlighted regions indicate segments
-            flagged as likely synthetic.
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
+    if suspicious_ranges:
+
+        st.markdown(
+            """
+            <p style="
+                color:#9FB3C8;
+                font-size:0.85rem;
+            ">
+                Highlighted regions indicate
+                segments flagged by the detector.
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    else:
+
+        st.markdown(
+            """
+            <p style="
+                color:#9FB3C8;
+                font-size:0.85rem;
+            ">
+                The current Reality Defender integration
+                does not provide region-level timestamps
+                through this pipeline.
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ========================================================
+    # EVIDENCE
+    # ========================================================
 
     st.markdown(
         '<h3 class="dt-display" '
         'style="margin-top:1.5rem;">'
-        'Assessment'
+        'Evidence'
         '</h3>',
         unsafe_allow_html=True,
     )
 
-    render_assessment_card(
-        ar["assessment"]
-    )
-
     with st.expander(
-        "Evidence details"
+        "Evidence details",
+        expanded=False,
     ):
 
         render_evidence_list(
-            ar["evidence"]
+            ar.get(
+                "evidence",
+                [],
+            )
         )
 
 

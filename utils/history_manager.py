@@ -134,3 +134,29 @@ def save_analysis(
 
     except OSError:
         pass
+
+
+# -------------------------------------------------
+# CLEAR HISTORY
+# -------------------------------------------------
+
+def clear_history() -> bool:
+    """
+    Permanently delete all persisted analysis history.
+
+    Returns True on success, False if the file couldn't be written
+    (e.g. a permissions issue) — callers should treat False as
+    "nothing was cleared" rather than assuming it raised, consistent
+    with save_analysis()'s own fail-quiet OSError handling above.
+    """
+
+    _ensure_history_file()
+
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as file:
+            json.dump([], file, indent=4)
+
+        return True
+
+    except OSError:
+        return False

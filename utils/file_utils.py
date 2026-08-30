@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from core.image_types import SUPPORTED_IMAGE_EXTENSIONS, is_supported_image_extension, is_supported_mime_type
+from core.video_types import is_supported_video_extension, is_supported_video_mime_type
+from core.audio_types import is_supported_audio_extension, is_supported_audio_mime_type
 
 
 def file_exists(path: str | Path) -> bool:
@@ -58,6 +60,74 @@ def validate_image_path(path: str | Path) -> tuple[bool, str | None]:
 
     mime_type = get_mime_type(p)
     if mime_type is not None and not is_supported_mime_type(mime_type):
+        return False, f"Unsupported MIME type: {mime_type}"
+
+    return True, None
+
+
+def is_video_file(path: str | Path) -> bool:
+    if not file_exists(path):
+        return False
+
+    ext = get_file_extension(path)
+    if not is_supported_video_extension(ext):
+        return False
+
+    mime_type = get_mime_type(path)
+    if mime_type is not None and not is_supported_video_mime_type(mime_type):
+        return False
+
+    return True
+
+
+def validate_video_path(path: str | Path) -> tuple[bool, str | None]:
+    if path is None or str(path).strip() == "":
+        return False, "Input path is empty or invalid."
+
+    p = Path(path)
+    if not p.exists():
+        return False, f"File does not exist: {p}"
+
+    ext = get_file_extension(p)
+    if not is_supported_video_extension(ext):
+        return False, f"Unsupported video file type: {ext or 'unknown'}"
+
+    mime_type = get_mime_type(p)
+    if mime_type is not None and not is_supported_video_mime_type(mime_type):
+        return False, f"Unsupported MIME type: {mime_type}"
+
+    return True, None
+
+
+def is_audio_file(path: str | Path) -> bool:
+    if not file_exists(path):
+        return False
+
+    ext = get_file_extension(path)
+    if not is_supported_audio_extension(ext):
+        return False
+
+    mime_type = get_mime_type(path)
+    if mime_type is not None and not is_supported_audio_mime_type(mime_type):
+        return False
+
+    return True
+
+
+def validate_audio_path(path: str | Path) -> tuple[bool, str | None]:
+    if path is None or str(path).strip() == "":
+        return False, "Input path is empty or invalid."
+
+    p = Path(path)
+    if not p.exists():
+        return False, f"File does not exist: {p}"
+
+    ext = get_file_extension(p)
+    if not is_supported_audio_extension(ext):
+        return False, f"Unsupported audio file type: {ext or 'unknown'}"
+
+    mime_type = get_mime_type(p)
+    if mime_type is not None and not is_supported_audio_mime_type(mime_type):
         return False, f"Unsupported MIME type: {mime_type}"
 
     return True, None

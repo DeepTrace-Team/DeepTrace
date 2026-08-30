@@ -1,1 +1,12 @@
-[]
+[
+    {
+        "id": "20260830172152858087",
+        "timestamp": "2026-08-30T17:21:52.858087",
+        "filename": "VID_20260523_090017_366_bsl.mp4",
+        "modality": "video",
+        "classification": "authentic",
+        "risk_level": "LOW",
+        "trust_score": 90,
+        "confidence": 0.9
+    }
+]

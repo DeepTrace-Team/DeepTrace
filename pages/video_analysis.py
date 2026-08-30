@@ -1,23 +1,35 @@
 """
-Video upload + timeline UI.
+DeepTrace Video Analysis Page.
 
-Uses mock data until the real video_pipeline.py is connected.
+Uploads a video, validates the 200 MB application limit,
+runs the Hive V3 video detector, saves the normalized result,
+and redirects to the Results page.
 """
+
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
 
 import streamlit as st
 
+from pipelines.video_pipeline import analyze_video
 from utils.history_manager import save_analysis
 
-from assets.components import (
-    render_assessment_card,
-    render_evidence_list,
-    render_timeline,
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+MAX_VIDEO_SIZE_MB = 200
+MAX_VIDEO_SIZE_BYTES = (
+    MAX_VIDEO_SIZE_MB * 1024 * 1024
 )
 
 
-# --------------------------------------------------
+# ============================================================
 # PAGE HEADER
-# --------------------------------------------------
+# ============================================================
 
 st.markdown(
     '<div class="dt-eyebrow">Video Analysis</div>',
@@ -25,98 +37,213 @@ st.markdown(
 )
 
 st.markdown(
-    '<h2 class="dt-display">Upload a video</h2>',
+    '<h2 class="dt-display">'
+    'Upload video'
+    '</h2>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <p style="
+        color:#9FB3C8;
+        margin-top:-0.5rem;
+    ">
+        Analyze videos for potential AI generation,
+        deepfake manipulation, and visual inconsistencies.
+        Maximum file size: 200 MB.
+    </p>
+    """,
     unsafe_allow_html=True,
 )
 
 
-# --------------------------------------------------
-# FILE UPLOAD
-# --------------------------------------------------
+# ============================================================
+# FILE UPLOADER
+# ============================================================
 
 uploaded = st.file_uploader(
     "Video file",
-    type=["mp4", "mov", "webm"],
+    type=[
+        "mp4",
+        "mov",
+        "avi",
+        "mkv",
+        "webm",
+        "m4v",
+    ],
     label_visibility="collapsed",
 )
 
 
-# --------------------------------------------------
-# VIDEO PREVIEW + ANALYSIS
-# --------------------------------------------------
+# ============================================================
+# NO FILE
+# ============================================================
 
-if uploaded:
+if not uploaded:
 
-    col_preview, col_action = st.columns([2, 1])
+    st.info(
+        "Upload a video to begin."
+    )
 
-    with col_preview:
-
-        st.video(
-            uploaded
-        )
-
-    with col_action:
-
-        st.markdown(
-            '<div class="dt-card">',
-            unsafe_allow_html=True,
-        )
-
-        st.write(
-            f"**File:** {uploaded.name}"
-        )
-
-        st.write(
-            f"**Size:** "
-            f"{uploaded.size / 1024 / 1024:.1f} MB"
-        )
-
-        analyze = st.button(
-            "Run analysis",
-            type="primary",
-            use_container_width=True,
-        )
-
-        st.markdown(
-            '</div>',
-            unsafe_allow_html=True,
-        )
+    st.stop()
 
 
-    # --------------------------------------------------
-    # RUN ANALYSIS
-    # --------------------------------------------------
+# ============================================================
+# SIZE CHECK
+# ============================================================
 
-    if analyze:
+if uploaded.size > MAX_VIDEO_SIZE_BYTES:
 
-        with st.status(
-            "Analyzing...",
-            expanded=True,
-        ) as status:
+    actual_size_mb = (
+        uploaded.size
+        / (1024 * 1024)
+    )
 
-            st.write("Extracting frames")
-            st.write("Analyzing sampled frames")
-            st.write("Calculating frame scores")
-            st.write("Building suspicion timeline")
-            st.write("Compiling video-level assessment")
+    st.error(
+        f"Video is {actual_size_mb:.1f} MB. "
+        f"DeepTrace supports videos up to "
+        f"{MAX_VIDEO_SIZE_MB} MB."
+    )
 
-            status.update(
-                label="Analysis complete",
-                state="complete",
+    st.stop()
+
+
+# ============================================================
+# VIDEO PREVIEW
+# ============================================================
+
+col_preview, col_info = st.columns(
+    [2, 1]
+)
+
+
+with col_preview:
+
+    st.video(
+        uploaded
+    )
+
+
+with col_info:
+
+    st.markdown(
+        """
+        <div class="dt-card">
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        **File**
+
+        {uploaded.name}
+
+        **Size**
+
+        {uploaded.size / (1024 * 1024):.2f} MB
+
+        **Limit**
+
+        {MAX_VIDEO_SIZE_MB} MB
+        """,
+    )
+
+    analyze = st.button(
+        "Run analysis",
+        type="primary",
+        use_container_width=True,
+    )
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# RUN ANALYSIS
+# ============================================================
+
+if analyze:
+
+    video_result = None
+    temp_path: Path | None = None
+
+    with st.status(
+        "Analyzing video...",
+        expanded=True,
+    ) as status:
+
+        try:
+
+            # ------------------------------------------------
+            # SAVE TEMPORARY VIDEO
+            # ------------------------------------------------
+
+            st.write(
+                "Saving uploaded video..."
             )
 
+            suffix = (
+                Path(
+                    uploaded.name
+                ).suffix.lower()
+                or ".mp4"
+            )
 
-        # --------------------------------------------------
-        # MOCK RESULT
-        #
-        # Replace later with:
-        #
-        # video_result = analyze_video(uploaded)
-        # --------------------------------------------------
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=suffix,
+            ) as temp_file:
 
-        video_result = {
+                temp_file.write(
+                    uploaded.getvalue()
+                )
 
-            "file_info": {
+                temp_path = Path(
+                    temp_file.name
+                )
+
+            # ------------------------------------------------
+            # PIPELINE
+            # ------------------------------------------------
+
+            st.write(
+                "Validating video..."
+            )
+
+            st.write(
+                "Running Hive V3 visual analysis..."
+            )
+
+            st.write(
+                "Evaluating manipulation evidence..."
+            )
+
+            st.write(
+                "Calculating DeepTrace assessment..."
+            )
+
+            analysis_result = analyze_video(
+                temp_path
+            )
+
+            video_result = (
+                analysis_result.to_dict()
+            )
+
+            # ------------------------------------------------
+            # RESTORE ORIGINAL UPLOAD INFO
+            # ------------------------------------------------
+
+            video_result["file_info"] = {
+
+                **video_result.get(
+                    "file_info",
+                    {},
+                ),
 
                 "filename":
                     uploaded.name,
@@ -125,152 +252,80 @@ if uploaded:
                     uploaded.type,
 
                 "size":
-                    f"{uploaded.size / 1024 / 1024:.1f} MB",
+                    f"{uploaded.size / (1024 * 1024):.2f} MB",
+            }
 
-            },
+            # ------------------------------------------------
+            # SAVE RESULT
+            # ------------------------------------------------
 
-            "assessment": {
+            st.session_state[
+                "video_result"
+            ] = video_result
 
-                "classification":
-                    "Manipulated Segments Detected",
+            st.session_state[
+                "current_result"
+            ] = {
 
-                "confidence":
-                    84.0,
+                **video_result,
 
-                "trust_score":
-                    27,
+                "modality":
+                    "video",
+            }
 
-                "risk_level":
-                    "HIGH",
+            # ------------------------------------------------
+            # HISTORY
+            # ------------------------------------------------
 
-            },
-
-            "frame_scores": [
-
-                12, 14, 18, 15,
-                20, 22, 61, 74,
-                88, 79, 55, 24,
-                20, 18, 19, 60,
-                82, 91, 85, 58,
-                21, 17, 15, 14,
-                16, 13, 12, 11,
-
-            ],
-
-            "suspicious_segments": [
-
-                {
-
-                    "start_pct":
-                        22,
-
-                    "end_pct":
-                        36,
-
-                    "severity":
-                        "HIGH",
-
-                },
-
-                {
-
-                    "start_pct":
-                        55,
-
-                    "end_pct":
-                        68,
-
-                    "severity":
-                        "MEDIUM",
-
-                },
-
-            ],
-
-            "evidence": [
-
-                {
-
-                    "source":
-                        "Frame-Level Detector",
-
-                    "score":
-                        0.88,
-
-                    "explanation": (
-                        "Sustained synthetic-generation signal across "
-                        "frames 0:07–0:11."
-                    ),
-
-                },
-
-                {
-
-                    "source":
-                        "Temporal Consistency",
-
-                    "score":
-                        0.66,
-
-                    "explanation": (
-                        "Flickering artifacts around facial regions "
-                        "between suspicious segments."
-                    ),
-
-                },
-
-            ],
-
-        }
-
-
-        # --------------------------------------------------
-        # SAVE VIDEO-SPECIFIC RESULT
-        # --------------------------------------------------
-
-        st.session_state[
-            "video_result"
-        ] = video_result
-
-
-        # --------------------------------------------------
-        # SAVE UNIVERSAL RESULT
-        # --------------------------------------------------
-
-        st.session_state[
-            "current_result"
-        ] = {
-
-            **video_result,
-
-            "modality":
+            save_analysis(
+                video_result,
                 "video",
+            )
 
-        }
+            status.update(
+                label="Analysis complete",
+                state="complete",
+            )
+
+        except Exception as error:
+
+            status.update(
+                label="Analysis failed",
+                state="error",
+            )
+
+            st.error(
+                f"Video analysis failed: {error}"
+            )
+
+        finally:
+
+            if temp_path is not None:
+
+                try:
+
+                    temp_path.unlink(
+                        missing_ok=True
+                    )
+
+                except Exception:
+                    pass
 
 
-        # --------------------------------------------------
-        # SAVE TO PERSISTENT HISTORY
-        # --------------------------------------------------
+    # ========================================================
+    # REDIRECT TO RESULTS
+    # ========================================================
 
-        save_analysis(
-            video_result,
-            "video",
-        )
-
-
-        # --------------------------------------------------
-        # GO TO RESULTS PAGE
-        # --------------------------------------------------
+    if video_result is not None:
 
         st.switch_page(
             "pages/results.py"
         )
 
 
-# --------------------------------------------------
-# SHOW RESULT ON VIDEO PAGE
-# --------------------------------------------------
+# ============================================================
+# SHOW RESULT IF AVAILABLE
+# ============================================================
 
 if "video_result" in st.session_state:
 
@@ -278,59 +333,33 @@ if "video_result" in st.session_state:
         "video_result"
     ]
 
-    st.markdown(
-        '<h3 class="dt-display" '
-        'style="margin-top:1.5rem;">'
-        'Suspicion Timeline'
-        '</h3>',
-        unsafe_allow_html=True,
-    )
-
-    render_timeline(
-        vr["suspicious_segments"],
-        duration_label="00:00 – 00:45",
-    )
-
-    st.line_chart(
-        vr["frame_scores"],
-        height=160,
-    )
-
-    st.markdown(
-        """
-        <p style="color:#9FB3C8;
-                  font-size:0.85rem;
-                  margin-top:-0.5rem;">
-            Per-frame suspicion score (sampled) —
-            spikes indicate likely manipulation.
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<h3 class="dt-display" '
-        'style="margin-top:1.5rem;">'
-        'Assessment'
-        '</h3>',
-        unsafe_allow_html=True,
-    )
-
-    render_assessment_card(
-        vr["assessment"]
-    )
-
-    with st.expander(
-        "Evidence details"
+    if isinstance(
+        vr,
+        dict,
     ):
 
-        render_evidence_list(
-            vr["evidence"]
+        assessment = vr.get(
+            "assessment",
+            {},
         )
 
+        if isinstance(
+            assessment,
+            dict,
+        ):
 
-elif not uploaded:
+            st.markdown(
+                '<h3 class="dt-display" '
+                'style="margin-top:1.5rem;">'
+                'Latest Assessment'
+                '</h3>',
+                unsafe_allow_html=True,
+            )
 
-    st.info(
-        "Upload a video to begin."
-    )
+            from assets.components import (
+                render_assessment_card,
+            )
+
+            render_assessment_card(
+                assessment
+            )

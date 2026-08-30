@@ -1,8 +1,5 @@
 """
 DeepTrace Results Page.
-
-Displays the latest analysis result for image, video, or audio
-and allows the user to download a forensic PDF report.
 """
 
 import streamlit as st
@@ -13,83 +10,181 @@ from assets.components import (
     render_metadata_findings,
 )
 
-from utils.report_generator import generate_report
+from utils.report_generator import (
+    generate_report,
+)
 
 
-# --------------------------------------------------
+def _md_html(html: str) -> str:
+    """
+    Strip leading whitespace from every line of an HTML block before
+    handing it to st.markdown().
+
+    Same fix as assets/components.py's _md_html: Streamlit's Markdown
+    renderer treats any line indented 4+ spaces as a preformatted
+    code block. The HTML blocks below are written with Python-source
+    indentation for readability, which is invisible in this file but
+    is literally part of the string passed to st.markdown() — without
+    stripping it, these cards render as raw literal tags instead of
+    HTML, even with unsafe_allow_html=True.
+    """
+
+    return "\n".join(
+        line.lstrip()
+        for line in html.strip("\n").splitlines()
+    )
+
+
+# ============================================================
 # PAGE HEADER
-# --------------------------------------------------
+# ============================================================
 
 st.markdown(
     '<div class="dt-eyebrow">Results</div>',
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    '<h2 class="dt-display" '
+    'style="margin-top:0;">'
+    'Analysis Results'
+    '</h2>',
+    unsafe_allow_html=True,
+)
 
-# --------------------------------------------------
-# GET CURRENT RESULT
-# --------------------------------------------------
+
+# ============================================================
+# GET RESULT
+# ============================================================
 
 result = st.session_state.get(
     "current_result"
 )
 
 
-# --------------------------------------------------
+# ============================================================
 # EMPTY STATE
-# --------------------------------------------------
+# ============================================================
 
 if not result:
 
     st.markdown(
-        """
+        _md_html("""
         <div class="dt-card">
-            No analysis yet.
 
-            Upload an image, video, or audio file
-            to see forensic results here.
+            <h3>No analysis yet</h3>
+
+            <p style="color:#9FB3C8;">
+                Upload an image, video, or audio file
+                to see forensic results here.
+            </p>
+
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
-
 
 else:
 
-    # --------------------------------------------------
+    # ========================================================
     # ASSESSMENT
-    # --------------------------------------------------
+    # ========================================================
 
     st.markdown(
-        '<h2 class="dt-display" style="margin-top:0;">'
+        '<h3 class="dt-display" '
+        'style="margin-top:0;">'
         'Assessment'
-        '</h2>',
+        '</h3>',
         unsafe_allow_html=True,
     )
 
+    # ========================================================
+    # VIEW SELECTOR
+    # ========================================================
 
     view = st.radio(
-        "View",
-        [
+        "Result view",
+        options=[
             "Simple View",
             "Forensic View",
         ],
+        index=0,
         horizontal=True,
         label_visibility="collapsed",
     )
 
+    # ========================================================
+    # ASSESSMENT CARD
+    # ========================================================
 
-    render_assessment_card(
-        result.get(
-            "assessment",
-            {},
-        )
+    assessment = result.get(
+        "assessment",
+        {},
     )
 
+    if not isinstance(
+        assessment,
+        dict,
+    ):
+        assessment = {}
 
-    # --------------------------------------------------
+    classification_upper = str(
+        assessment.get(
+            "classification",
+            "",
+        )
+    ).upper().strip()
+
+    # NOT_APPLICABLE / UNABLE_TO_EVALUATE mean the detector declined
+    # to score the file at all — showing that through the normal
+    # numeric card (confidence=0%, trust_score=0/100) reads exactly
+    # like a maximally-untrustworthy verdict, which is misleading:
+    # it's "no verdict available," not "high risk." Render a plain
+    # status notice instead. (pages/audio_analysis.py already does
+    # this same check for its own "already analyzed" view — this is
+    # the same logic applied here too, since every analysis redirects
+    # to this page immediately after completing, so this is the view
+    # that actually needs it.)
+    if classification_upper in {
+        "NOT_APPLICABLE",
+        "UNABLE_TO_EVALUATE",
+    }:
+
+        st.markdown(
+            _md_html("""
+            <div class="dt-card">
+
+                <div class="dt-eyebrow">
+                    Detection Status
+                </div>
+
+                <p style="
+                    color:#9FB3C8;
+                    margin-top:0.5rem;
+                    margin-bottom:0;
+                ">
+                    The detector could not reliably evaluate this
+                    file, so no authenticity score was generated.
+                    This is not the same as a low-trust or high-risk
+                    result — it simply means no verdict is available.
+                    Check the evidence details below for the
+                    detector's stated reason, if any.
+                </p>
+
+            </div>
+            """),
+            unsafe_allow_html=True,
+        )
+
+    else:
+
+        render_assessment_card(
+            assessment
+        )
+
+    # ========================================================
     # SIMPLE VIEW
-    # --------------------------------------------------
+    # ========================================================
 
     if view == "Simple View":
 
@@ -98,29 +193,47 @@ else:
             [],
         )
 
+        if not isinstance(
+            evidence,
+            list,
+        ):
+            evidence = []
+
         evidence_count = len(
             evidence
         )
 
+        signal_word = (
+            "signal"
+            if evidence_count == 1
+            else "signals"
+        )
+
         st.markdown(
-            f"""
-            <p style="color:#9FB3C8;">
-                Backed by {evidence_count} evidence
-                {"signal" if evidence_count == 1 else "signals"}.
-                Switch to Forensic View for the full breakdown.
+            _md_html(f"""
+            <p style="
+                color:#9FB3C8;
+                margin-top:1rem;
+            ">
+                Backed by {evidence_count}
+                evidence {signal_word}.
+
+                Select <b>Forensic View</b>
+                above for the full breakdown.
             </p>
-            """,
+            """),
             unsafe_allow_html=True,
         )
 
-
-    # --------------------------------------------------
+    # ========================================================
     # FORENSIC VIEW
-    # --------------------------------------------------
+    # ========================================================
 
     else:
 
-        # ---------------- EVIDENCE ----------------
+        # ====================================================
+        # EVIDENCE
+        # ====================================================
 
         st.markdown(
             '<h3 class="dt-display" '
@@ -130,19 +243,44 @@ else:
             unsafe_allow_html=True,
         )
 
-        render_evidence_list(
-            result.get(
-                "evidence",
-                [],
-            )
+        evidence = result.get(
+            "evidence",
+            [],
         )
 
+        if not isinstance(
+            evidence,
+            list,
+        ):
+            evidence = []
 
-        # ---------------- METADATA ----------------
+        if evidence:
+
+            try:
+
+                render_evidence_list(
+                    evidence
+                )
+
+            except Exception as exc:
+
+                st.error(
+                    f"Unable to display evidence: {exc}"
+                )
+
+        else:
+
+            st.info(
+                "No evidence entries were returned."
+            )
+
+        # ====================================================
+        # METADATA
+        # ====================================================
 
         metadata = result.get(
             "metadata",
-            {}
+            {},
         )
 
         if metadata:
@@ -155,17 +293,32 @@ else:
                 unsafe_allow_html=True,
             )
 
-            render_metadata_findings(
-                metadata
-            )
+            try:
 
+                render_metadata_findings(
+                    metadata
+                )
 
-        # ---------------- VIDEO SEGMENTS ----------------
+            except Exception as exc:
+
+                st.error(
+                    f"Unable to display metadata: {exc}"
+                )
+
+        # ====================================================
+        # VIDEO SEGMENTS
+        # ====================================================
 
         suspicious_segments = result.get(
             "suspicious_segments",
-            []
+            [],
         )
+
+        if not isinstance(
+            suspicious_segments,
+            list,
+        ):
+            suspicious_segments = []
 
         if suspicious_segments:
 
@@ -179,30 +332,108 @@ else:
 
             for segment in suspicious_segments:
 
+                if not isinstance(
+                    segment,
+                    dict,
+                ):
+                    continue
+
+                severity = str(
+                    segment.get(
+                        "severity",
+                        "UNKNOWN",
+                    )
+                ).upper()
+
+                start_pct = segment.get(
+                    "start_pct",
+                    0,
+                )
+
+                end_pct = segment.get(
+                    "end_pct",
+                    0,
+                )
+
+                timestamp = segment.get(
+                    "timestamp"
+                )
+
+                score = segment.get(
+                    "score"
+                )
+
+                # --------------------------------------------
+                # VIDEO SEGMENT CARD
+                # --------------------------------------------
+
+                details = (
+                    f"From {start_pct}% to "
+                    f"{end_pct}% of the video."
+                )
+
+                if timestamp is not None:
+
+                    details += (
+                        f" Timestamp: "
+                        f"{timestamp}s."
+                    )
+
+                if score is not None:
+
+                    try:
+
+                        score_pct = round(
+                            float(score) * 100
+                        )
+
+                    except (
+                        TypeError,
+                        ValueError,
+                    ):
+
+                        score_pct = None
+
+                    if score_pct is not None:
+
+                        details += (
+                            f" Detection score: "
+                            f"{score_pct}%."
+                        )
+
                 st.markdown(
-                    f"""
+                    _md_html(f"""
                     <div class="dt-card">
+
                         <div class="dt-eyebrow">
-                            {segment.get("severity", "UNKNOWN")} RISK
+                            {severity} RISK
                         </div>
 
-                        <p style="margin:0.4rem 0 0 0;">
-                            From {segment.get("start_pct", 0)}%
-                            to {segment.get("end_pct", 0)}%
-                            of the video.
+                        <p style="
+                            margin:0.4rem 0 0 0;
+                        ">
+                            {details}
                         </p>
+
                     </div>
-                    """,
+                    """),
                     unsafe_allow_html=True,
                 )
 
-
-        # ---------------- AUDIO RANGES ----------------
+        # ====================================================
+        # AUDIO RANGES
+        # ====================================================
 
         suspicious_ranges = result.get(
             "suspicious_ranges",
-            []
+            [],
         )
+
+        if not isinstance(
+            suspicious_ranges,
+            list,
+        ):
+            suspicious_ranges = []
 
         if suspicious_ranges:
 
@@ -214,30 +445,53 @@ else:
                 unsafe_allow_html=True,
             )
 
-            for start, end in suspicious_ranges:
+            for audio_range in suspicious_ranges:
+
+                if (
+                    not isinstance(
+                        audio_range,
+                        (list, tuple),
+                    )
+                    or len(audio_range) < 2
+                ):
+                    continue
+
+                start = audio_range[0]
+                end = audio_range[1]
 
                 st.markdown(
-                    f"""
+                    _md_html(f"""
                     <div class="dt-card">
+
                         <div class="dt-eyebrow">
                             FLAGGED REGION
                         </div>
 
-                        <p style="margin:0.4rem 0 0 0;">
+                        <p style="
+                            margin:0.4rem 0 0 0;
+                        ">
                             {start}s – {end}s
                         </p>
+
                     </div>
-                    """,
+                    """),
                     unsafe_allow_html=True,
                 )
 
-
-        # ---------------- FILE INFO ----------------
+        # ====================================================
+        # FILE INFORMATION
+        # ====================================================
 
         file_info = result.get(
             "file_info",
-            {}
+            {},
         )
+
+        if not isinstance(
+            file_info,
+            dict,
+        ):
+            file_info = {}
 
         if file_info:
 
@@ -249,42 +503,37 @@ else:
                 unsafe_allow_html=True,
             )
 
-            info_cols = st.columns(
-                len(file_info)
-            )
+            for key, value in file_info.items():
 
-            for column, (
-                key,
-                value,
-            ) in zip(
-                info_cols,
-                file_info.items(),
-            ):
+                formatted_key = (
+                    str(key)
+                    .replace(
+                        "_",
+                        " ",
+                    )
+                    .title()
+                )
 
-                with column:
+                col1, col2 = st.columns(
+                    [1, 2]
+                )
+
+                with col1:
 
                     st.markdown(
-                        f"""
-                        <div class="dt-card">
-
-                            <div class="dt-eyebrow">
-                                {key.replace("_", " ").title()}
-                            </div>
-
-                            <p class="dt-mono"
-                               style="margin:0.3rem 0 0 0;">
-                                {value}
-                            </p>
-
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
+                        f"**{formatted_key}**"
                     )
 
+                with col2:
 
-    # --------------------------------------------------
-    # PDF REPORT DOWNLOAD
-    # --------------------------------------------------
+                    st.code(
+                        str(value),
+                        language=None,
+                    )
+
+    # ========================================================
+    # PDF REPORT
+    # ========================================================
 
     st.markdown(
         '<h3 class="dt-display" '
@@ -294,17 +543,16 @@ else:
         unsafe_allow_html=True,
     )
 
-
     st.markdown(
-        """
+        _md_html("""
         <p style="color:#9FB3C8;">
-            Generate a downloadable PDF containing the assessment,
-            evidence signals, metadata findings, and flagged regions.
+            Generate a downloadable PDF containing
+            the assessment, evidence signals,
+            metadata findings, and flagged regions.
         </p>
-        """,
+        """),
         unsafe_allow_html=True,
     )
-
 
     try:
 
@@ -314,29 +562,38 @@ else:
 
         file_info = result.get(
             "file_info",
-            {}
+            {},
         )
+
+        if not isinstance(
+            file_info,
+            dict,
+        ):
+            file_info = {}
 
         filename = file_info.get(
             "filename",
-            "deeptrace_analysis"
+            "deeptrace_analysis",
         )
 
-        safe_name = filename.rsplit(
+        safe_name = str(
+            filename
+        ).rsplit(
             ".",
             1,
         )[0]
 
-
         st.download_button(
             label="Download Forensic Report PDF",
             data=pdf_buffer,
-            file_name=f"{safe_name}_DeepTrace_Report.pdf",
+            file_name=(
+                f"{safe_name}"
+                "_DeepTrace_Report.pdf"
+            ),
             mime="application/pdf",
             type="primary",
             use_container_width=True,
         )
-
 
     except Exception as error:
 

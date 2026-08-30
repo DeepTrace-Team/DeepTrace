@@ -2,72 +2,161 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.contracts import AnalysisResult, Assessment
-from core.trust_score import calculate_trust_score, risk_level
-from services.detection_adapter import convert_detection_to_evidence
-from services.detection_service import detect_image
-from services.image_ingestion import ingest_image_file
-from services.metadata_analyzer import analyze_image_metadata
-from utils.preprocessing import preprocess_image
+from core.contracts import (
+    AnalysisResult,
+    Assessment,
+)
+
+from core.trust_score import (
+    authenticity_confidence,
+    calculate_trust_score,
+    risk_level,
+)
+
+from services.detection_adapter import (
+    convert_detection_to_evidence,
+)
+
+from services.detection_service import (
+    detect_image,
+)
+
+from services.image_ingestion import (
+    ingest_image_file,
+)
+
+from services.metadata_analyzer import (
+    analyze_image_metadata,
+)
+
+from utils.preprocessing import (
+    preprocess_image,
+)
 
 
 def analyze_image(
     image_path: str | Path,
 ) -> AnalysisResult:
-    """
-    Run the complete DeepTrace image analysis pipeline.
 
-    Steps:
-    1. Ingest and validate the image.
-    2. Preprocess the image.
-    3. Analyze image metadata.
-    4. Run Reality Defender detection.
-    5. Convert detection results into evidence.
-    6. Calculate the Trust Score.
-    7. Determine risk level and classification.
-    8. Return the unified AnalysisResult.
-    """
+    # --------------------------------------------------
+    # 1. INGEST
+    # --------------------------------------------------
 
-    # Step 1: Validate image and collect file information.
-    result = ingest_image_file(image_path)
-
-    # Step 2: Preprocess the image.
-    preprocess_image(image_path)
-
-    # Step 3: Analyze metadata.
-    metadata, metadata_evidence = analyze_image_metadata(image_path)
-
-    result.metadata = metadata
-    result.evidence.extend(metadata_evidence)
-
-    # Step 4: Run Reality Defender.
-    detection_result = detect_image(image_path)
-
-    # Step 5: Convert Reality Defender output into
-    # standardized DeepTrace evidence.
-    detection_evidence = convert_detection_to_evidence(
-        detection_result
+    result = ingest_image_file(
+        image_path
     )
 
-    result.evidence.extend(detection_evidence)
+    # --------------------------------------------------
+    # 2. PREPROCESS
+    # --------------------------------------------------
 
-    # Step 6: Calculate Trust Score using
-    # Reality Defender's detector confidence.
-    classification = detection_result["status"].lower()
-    detector_score = float(detection_result["score"])
+    preprocess_image(
+        image_path
+    )
+
+    # --------------------------------------------------
+    # 3. METADATA
+    # --------------------------------------------------
+
+    metadata, metadata_evidence = (
+        analyze_image_metadata(
+            image_path
+        )
+    )
+
+    result.metadata = metadata
+
+    result.evidence.extend(
+        metadata_evidence
+    )
+
+    # --------------------------------------------------
+    # 4. REALITY DEFENDER
+    # --------------------------------------------------
+
+    detection_result = detect_image(
+        image_path
+    )
+
+    # --------------------------------------------------
+    # 5. DETECTION EVIDENCE
+    #
+    # convert_detection_to_evidence() uses the raw, unflipped
+    # detector score for every evidence entry — see that
+    # function's docstring for why.
+    # --------------------------------------------------
+
+    detection_evidence = (
+        convert_detection_to_evidence(
+            detection_result,
+            modality="image",
+        )
+    )
+
+    result.evidence.extend(
+        detection_evidence
+    )
+
+    # --------------------------------------------------
+    # 6. CLASSIFICATION
+    # --------------------------------------------------
+
+    classification = str(
+        detection_result.get(
+            "status",
+            "unknown",
+        )
+    ).lower().strip()
+
+    detector_score = float(
+        detection_result.get(
+            "score",
+            0.0,
+        )
+    )
+
+    # --------------------------------------------------
+    # 7. TRUST SCORE
+    #
+    # Uses the RAW detector_score, never the flipped display
+    # confidence below — see calculate_trust_score's docstring.
+    # --------------------------------------------------
 
     trust_score = calculate_trust_score(
         detector_score,
         classification,
     )
 
-    # Step 7: Determine risk level.
-    current_risk = risk_level(trust_score)
+    # --------------------------------------------------
+    # 8. RISK
+    # --------------------------------------------------
 
-    # Step 8: Build the final assessment.
+    current_risk = risk_level(
+        trust_score
+    )
+
+    # --------------------------------------------------
+    # 9. DISPLAY CONFIDENCE
+    #
+    # Flipped for AUTHENTIC so the shown percentage matches the
+    # shown label — display-only, see authenticity_confidence's
+    # docstring. Never fed into calculate_trust_score.
+    # --------------------------------------------------
+
+    display_confidence = (
+        authenticity_confidence(
+            detector_score,
+            classification,
+        )
+    )
+
+    # --------------------------------------------------
+    # 10. ASSESSMENT
+    # --------------------------------------------------
+
     result.assessment = Assessment(
         classification=classification,
-        confidence=detector_score,
+        confidence=display_confidence,
         trust_score=trust_score,
         risk_level=current_risk,
     )
