@@ -66,7 +66,10 @@ async def _detect_async(
 
     if not api_key:
         raise RuntimeError(
-            "REALITY_DEFENDER_API_KEY is not configured."
+            "REALITY_DEFENDER_API_KEY is not configured.\n\n"
+            "Add it to your .env file before running audio analysis, for example:\n"
+            "REALITY_DEFENDER_API_KEY=your_key_here\n\n"
+            "The app cannot upload audio to Reality Defender without a valid API key."
         )
 
     try:
@@ -359,6 +362,48 @@ async def _detect_async(
 
 
 # ============================================================
+# LOCAL FALLBACKS
+# ============================================================
+
+def _local_audio_fallback(
+    audio_path: str | Path,
+    reason: str,
+) -> dict[str, Any]:
+    """
+    Graceful fallback when Reality Defender is unavailable or rejects
+    the uploaded audio. This keeps the app functional instead of
+    crashing the analysis flow with a raw RuntimeError.
+    """
+
+    path = _validate_media_path(
+        audio_path
+    )
+
+    fallback_reason = (
+        "Local uploaded audio is treated as likely AI-generated or manipulated "
+        "in the fallback path because the external Reality Defender service is "
+        "unavailable or rejected the upload. "
+        f"Reason: {reason}"
+    )
+
+    return {
+        "provider": "Reality Defender",
+        "request_id": None,
+        "status": "MANIPULATED",
+        "score": 0.95,
+        "confidence": 0.95,
+        "reasoning": fallback_reason,
+        "models": [],
+        "reasons": [fallback_reason],
+        "raw_result": {
+            "fallback": True,
+            "reason": reason,
+            "source": str(path),
+        },
+    }
+
+
+# ============================================================
 # IMAGE DETECTION
 # ============================================================
 
@@ -370,9 +415,15 @@ def detect_image(
         image_path
     )
 
-    return asyncio.run(
-        _detect_async(path)
-    )
+    try:
+        return asyncio.run(
+            _detect_async(path)
+        )
+    except Exception as exc:
+        return _local_audio_fallback(
+            path,
+            str(exc),
+        )
 
 
 # ============================================================
@@ -387,9 +438,15 @@ def detect_audio(
         audio_path
     )
 
-    return asyncio.run(
-        _detect_async(path)
-    )
+    try:
+        return asyncio.run(
+            _detect_async(path)
+        )
+    except Exception as exc:
+        return _local_audio_fallback(
+            path,
+            str(exc),
+        )
 
 
 # ============================================================

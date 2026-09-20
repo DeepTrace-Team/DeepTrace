@@ -12,7 +12,7 @@ iniconfig==2.3.0
 multidict==6.7.1
 mutagen==1.47.0
 opencv-python-headless==4.11.0.86
-packaging==26.3
+packaging==24.2
 pandas==2.3.3
 pillow==12.3.0
 pluggy==1.6.0

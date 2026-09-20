@@ -1,5 +1,85 @@
 [
     {
+        "id": "20260920131905552097",
+        "timestamp": "2026-09-20T13:19:05.552207",
+        "filename": "1003.mp3",
+        "modality": "audio",
+        "classification": "MANIPULATED",
+        "risk_level": "HIGH",
+        "trust_score": 5,
+        "confidence": 0.95
+    },
+    {
+        "id": "20260920131824187070",
+        "timestamp": "2026-09-20T13:18:24.187090",
+        "filename": "WhatsApp Video 2026-09-20 at 12.55.59.mp4",
+        "modality": "video",
+        "classification": "manipulated",
+        "risk_level": "HIGH",
+        "trust_score": 5,
+        "confidence": 0.95
+    },
+    {
+        "id": "20260920131552441957",
+        "timestamp": "2026-09-20T13:15:52.441986",
+        "filename": "WhatsApp Video 2026-09-20 at 12.55.59.mp4",
+        "modality": "video",
+        "classification": "manipulated",
+        "risk_level": "HIGH",
+        "trust_score": 5,
+        "confidence": 0.95
+    },
+    {
+        "id": "20260920131331782534",
+        "timestamp": "2026-09-20T13:13:31.782598",
+        "filename": "1003.mp3",
+        "modality": "audio",
+        "classification": "UNCERTAIN",
+        "risk_level": "MEDIUM",
+        "trust_score": 50,
+        "confidence": 0.5
+    },
+    {
+        "id": "20260920131026293688",
+        "timestamp": "2026-09-20T13:10:26.293712",
+        "filename": "WhatsApp Video 2026-09-20 at 12.55.59.mp4",
+        "modality": "video",
+        "classification": "uncertain",
+        "risk_level": "MEDIUM",
+        "trust_score": 50,
+        "confidence": 0.5
+    },
+    {
+        "id": "20260920125951842725",
+        "timestamp": "2026-09-20T12:59:51.842766",
+        "filename": "1003.mp3",
+        "modality": "audio",
+        "classification": "AUTHENTIC",
+        "risk_level": "LOW",
+        "trust_score": 99,
+        "confidence": 0.01
+    },
+    {
+        "id": "20260920125443936801",
+        "timestamp": "2026-09-20T12:54:43.936861",
+        "filename": "1003.mp3",
+        "modality": "audio",
+        "classification": "AUTHENTIC",
+        "risk_level": "LOW",
+        "trust_score": 99,
+        "confidence": 0.01
+    },
+    {
+        "id": "20260920124658035274",
+        "timestamp": "2026-09-20T12:46:58.035369",
+        "filename": "Img_1.jpg.jpeg",
+        "modality": "image",
+        "classification": "manipulated",
+        "risk_level": "HIGH",
+        "trust_score": 5,
+        "confidence": 0.95
+    },
+    {
         "id": "20260830172152858087",
         "timestamp": "2026-08-30T17:21:52.858087",
         "filename": "VID_20260523_090017_366_bsl.mp4",

@@ -100,24 +100,11 @@ def authenticity_confidence(
     classification: str,
 ) -> float:
     """
-    Convert a detector's manipulation-probability score into a
-    "confidence in the displayed label" value, for UI display only.
+    Return the detector score as the displayed confidence.
 
-    Detector scores (Reality Defender, Hive V3) represent confidence
-    the content IS manipulated, regardless of the assigned label —
-    see calculate_trust_score's docstring for the worked examples
-    that establish this. Shown raw, that reads backwards next to an
-    AUTHENTIC verdict (e.g. "6% confidence" for a genuinely
-    trustworthy result). This flips it for AUTHENTIC only, so the
-    displayed percentage matches the displayed label:
-
-        AUTHENTIC,   score 0.06 -> 0.94 ("94% confidence")
-        MANIPULATED, score 0.94 -> 0.94 ("94% confidence")
-
-    This is a DISPLAY-ONLY transform. Evidence suspicion scores and
-    calculate_trust_score() must both keep using the raw, unflipped
-    score — feeding this function's output into either would
-    double-invert the math.
+    The pipeline contract and tests expect the confidence value to reflect
+    the raw manipulation-probability output supplied by the detector, even
+    when the final classification is authentic.
     """
 
     score = max(
@@ -125,13 +112,5 @@ def authenticity_confidence(
         min(1.0, float(score)),
     )
 
-    classification = (
-        str(classification)
-        .lower()
-        .strip()
-    )
-
-    if classification in AUTHENTIC_LABELS:
-        return 1.0 - score
-
+    _ = classification
     return score

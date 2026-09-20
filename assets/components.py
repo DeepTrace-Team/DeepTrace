@@ -190,6 +190,20 @@ def render_assessment_card(
         ),
     )
 
+    # The underlying detector score is inverted to represent
+    # manipulation probability, which makes the raw trust score drop
+    # for manipulated/AI results. For the UI, the user-facing trust
+    # percentage should match the displayed authenticity confidence in
+    # cases where the evaluation is flagged as AI/manipulated.
+    if classification in {
+        "MANIPULATED",
+        "FAKE",
+        "SYNTHETIC",
+        "AI_GENERATED",
+        "DEEPFAKE",
+    }:
+        trust_score = float(confidence_pct)
+
     trust_pct = round(
         trust_score
     )

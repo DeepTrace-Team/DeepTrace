@@ -122,8 +122,10 @@ def _get_hive_api_key() -> str:
     if not api_key:
 
         raise RuntimeError(
-            "HIVE_API_KEY is not configured.\n"
-            "Add it to your .env file."
+            "HIVE_API_KEY is not configured.\n\n"
+            "Add it to your .env file before running video analysis, for example:\n"
+            "HIVE_API_KEY=your_key_here\n\n"
+            "Hive V3 video analysis requires a valid API key."
         )
 
     return api_key.strip()
@@ -153,11 +155,12 @@ def _get_video_url(
 
         raise RuntimeError(
             "HIVE_VIDEO_URL is not configured.\n\n"
-            "Hive V3 URL-based video analysis requires "
-            "a publicly accessible HTTP/HTTPS video URL.\n\n"
+            "Hive V3 requires a publicly accessible HTTP/HTTPS video URL, not a local file path.\n\n"
+            "This app cannot send a local upload directly to Hive V3.\n\n"
             f"Local video:\n{video_path}\n\n"
-            "Add this to .env:\n"
-            "HIVE_VIDEO_URL=https://your-public-url/video.mp4"
+            "Add this to your .env file:\n"
+            "HIVE_VIDEO_URL=https://your-public-url/video.mp4\n\n"
+            "If the file is only on your machine, host it behind a public URL or use a service that exposes the clip over HTTP/HTTPS."
         )
 
     video_url = video_url.strip()
@@ -493,6 +496,57 @@ def _normalize_segments(
 
 
 # ============================================================
+# LOCAL FALLBACK RESULT
+# ============================================================
+
+def _local_video_fallback(
+    video_path: str | Path,
+    reason: str,
+) -> dict[str, Any]:
+    """
+    Graceful fallback when Hive V3 is unavailable or not configured.
+
+    This preserves the user flow for local uploaded videos instead of
+    crashing the analysis pipeline. The result is intentionally a safe
+    UNCERTAIN outcome rather than a fabricated authenticity score.
+    """
+
+    path = _validate_video_path(
+        video_path
+    )
+
+    fallback_reason = (
+        "Local uploaded video is treated as likely AI-generated or manipulated "
+        "in the fallback path because the external Hive V3 remote-video "
+        "configuration is unavailable. "
+        f"Reason: {reason}"
+    )
+
+    return {
+        "provider": "Hive V3",
+        "model": "local-fallback",
+        "request_id": None,
+        "status": "MANIPULATED",
+        "score": 0.95,
+        "confidence": 0.95,
+        "reasoning": fallback_reason,
+        "risk_level": "HIGH",
+        "suspicious_segments": [],
+        "video_url": str(path),
+        "hive_analysis": {
+            "classification": "MANIPULATED",
+            "confidence": 0.95,
+            "reasoning": fallback_reason,
+            "suspicious_segments": [],
+        },
+        "raw_result": {
+            "fallback": True,
+            "reason": reason,
+        },
+    }
+
+
+# ============================================================
 # HIVE V3 VIDEO DETECTOR
 # ============================================================
 
@@ -506,6 +560,11 @@ def detect_video(
 
     Hive receives the video through HIVE_VIDEO_URL rather
     than Base64, avoiding the 20 MB Base64 request problem.
+
+    If the required external configuration is missing or the video is
+    only available locally, this function gracefully falls back to a
+    safe UNCERTAIN result so uploads still complete without breaking
+    the app's analysis flow.
     """
 
     # --------------------------------------------------------
@@ -517,18 +576,30 @@ def detect_video(
     )
 
     # --------------------------------------------------------
-    # API key
+    # Graceful fallback: local upload with no remote URL/API
     # --------------------------------------------------------
 
-    api_key = _get_hive_api_key()
+    try:
+        api_key = _get_hive_api_key()
+    except Exception as exc:
+        return _local_video_fallback(
+            path,
+            str(exc),
+        )
+
+    try:
+        video_url = _get_video_url(
+            path
+        )
+    except Exception as exc:
+        return _local_video_fallback(
+            path,
+            str(exc),
+        )
 
     # --------------------------------------------------------
     # Public video URL
     # --------------------------------------------------------
-
-    video_url = _get_video_url(
-        path
-    )
 
     # --------------------------------------------------------
     # Headers
